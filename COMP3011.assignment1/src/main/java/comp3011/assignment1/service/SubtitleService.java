@@ -80,7 +80,7 @@ public class SubtitleService {
                 new LinkedMultiValueMap<>();
 
         requestBody.add("file", filePart);
-        requestBody.add("model", "whisper-1");
+        requestBody.add("model", "whisper-large-v3-turbo");
         requestBody.add("response_format", "verbose_json");
         requestBody.add("timestamp_granularities[]", "word");
         requestBody.add("timestamp_granularities[]", "segment");

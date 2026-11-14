@@ -16,7 +16,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/api/v1")
 public class AdminController {
-
+	
     private final ApplicationContext applicationContext;
     private final GlobalStats globalStats;
 
@@ -26,7 +26,8 @@ public class AdminController {
     // Prevent shutdown from being requested more than once
     private final AtomicBoolean shutdownInProgress =
             new AtomicBoolean(false);
-
+    
+    
     public AdminController(
             ApplicationContext applicationContext,
             GlobalStats globalStats) {
@@ -113,7 +114,8 @@ public class AdminController {
         GlobalStatsResponse response =
                 new GlobalStatsResponse(
                         globalStats.getInputTokens(),
-                        globalStats.getOutputTokens()
+                        globalStats.getOutputTokens(),
+                        globalStats.getAudioSeconds()
                 );
 
         return ResponseEntity.ok(response);
@@ -168,13 +170,15 @@ public class AdminController {
 
         private final long inputTokens;
         private final long outputTokens;
+        private final double audioSeconds;
 
         public GlobalStatsResponse(
                 long inputTokens,
-                long outputTokens) {
-
+                long outputTokens, 
+        		double audioSeconds){ 
             this.inputTokens = inputTokens;
             this.outputTokens = outputTokens;
+            this.audioSeconds = audioSeconds;
         }
 
         public long getInputTokens() {
@@ -183,6 +187,10 @@ public class AdminController {
 
         public long getOutputTokens() {
             return outputTokens;
+        }
+        
+        public double getAudioSeconds() {
+            return audioSeconds;
         }
     }
 
