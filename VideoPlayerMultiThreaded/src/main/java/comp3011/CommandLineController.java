@@ -173,6 +173,7 @@ public class CommandLineController {
             case "--mottle-frames" -> new FrameMottler();
             case "--bleed-frames" -> new FrameBleeder();
             case "--pepper-frames" -> new FramePepperer();
+            case "--subtitle-frames" -> new FrameSubtitler();
             default -> null;
         };
 
@@ -188,19 +189,36 @@ public class CommandLineController {
      * Maps each short option to its frame processor.
      */
     private FrameProcessor createProcessor(char option) {
+
         return switch (option) {
+
             case 'n' -> new FrameNumberer();
+
             case 's' -> new FrameScratcher();
+
+            // Assignment 3: Subtitle frame processor
+            case 'S' -> new FrameSubtitler();
+
             case 'f' -> new FrameFlickerer();
+
             case 'w' -> new FrameBlackAndWhiter();
+
             case 'y' -> new FrameYellower();
+
             case 'v' -> new FrameVignetter();
+
             case 'd' -> new FrameDuster();
+
             case 'j' -> new FrameJitterer();
+
             case 'm' -> new FrameMottler();
+
             case 'b' -> new FrameBleeder();
+
             case 'p' -> new FramePepperer();
+
             default -> null;
+
         };
     }
     
@@ -238,5 +256,6 @@ public class CommandLineController {
         System.out.println("Frame processors are applied in command-line order and may be repeated.");
         System.out.println("Example: -nssnfwyvdjmbp numbers, scratches twice, numbers again, flickers,");
         System.out.println("converts, warms, vignettes, dusts, jitters, mottles, bleeds, then peppers.");
+        System.out.println("  -S, --subtitle-frames  Add speech-to-text subtitles to frames");
     }
 }

@@ -1,6 +1,7 @@
 package comp3011.assignment1.controller;
 
 import java.time.Duration;
+
 import java.time.Instant;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -12,6 +13,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/v1")
@@ -121,7 +123,15 @@ public class AdminController {
         return ResponseEntity.ok(response);
     }
 
+    // Assignment 3: Return cumulative audio usage in seconds
+    @GetMapping("/global/usage")
+    public ResponseEntity<Map<String, Double>> getGlobalUsage() {
 
+        double usage = globalStats.getAudioSeconds();
+
+        return ResponseEntity.ok(Map.of("usage", usage));
+    }
+    
     public static class UptimeResponse {
 
         private final String utcServerStart;
