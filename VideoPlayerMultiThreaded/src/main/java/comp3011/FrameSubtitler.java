@@ -100,7 +100,13 @@ public class FrameSubtitler extends FrameProcessor {
 
 	         // Wrap subtitles into a maximum of two lines,
 	         // with no more than 42 characters per line.
-	         java.util.List<String> lines = wrapSubtitle(text);
+             java.util.List<String> lines;
+
+             if (text.contains("\n")) {
+                 lines = java.util.Arrays.asList(text.split("\n", -1));
+             } else {
+                 lines = wrapSubtitle(text);
+             }
 	
 	         int lineHeight = g.getFontMetrics().getHeight();
 	         int bottomY = height - Math.max(20, height / 12);
