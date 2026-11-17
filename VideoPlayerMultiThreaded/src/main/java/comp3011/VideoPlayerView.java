@@ -57,6 +57,7 @@ public class VideoPlayerView {
     private final Button forwardFiveButton;
     private final Button stopButton;
     private final Button audioButton;
+    private final Button subtitleButton;
 
     public VideoPlayerView() {
         imageView.setPreserveRatio(true);
@@ -75,6 +76,11 @@ public class VideoPlayerView {
         forwardFiveButton = iconButton(createLoopIcon(true, "5"));
         stopButton = iconButton(createStopIcon());
         audioButton = iconButton(createAudioIcon(false));
+        subtitleButton = new Button("CC");
+        subtitleButton.setFocusTraversable(false);
+        subtitleButton.setMinSize(42, 36);
+        subtitleButton.setPrefSize(42, 36);
+        subtitleButton.setStyle("-fx-font-weight: bold;");
         setPlaybackControlsDisabled(true);
 
         HBox controls = new HBox(
@@ -85,6 +91,7 @@ public class VideoPlayerView {
                 forwardFiveButton,
                 stopButton,
                 audioButton,
+                subtitleButton,
                 statusLabel);
 
         controls.setPadding(new Insets(10));
@@ -126,6 +133,19 @@ public class VideoPlayerView {
     public Button getAudioButton() {
         return audioButton;
     }
+    
+    public Button getSubtitleButton() {
+        return subtitleButton;
+    }
+
+    public void showSubtitlesEnabled(boolean enabled) {
+        subtitleButton.setStyle(
+            "-fx-font-weight: bold;"
+            + (enabled
+                ? "-fx-background-color: lightgreen;"
+                : "-fx-background-color: lightgray;")
+        );
+    }
 
     public void setStatus(String status) {
         statusLabel.setText(status);
@@ -158,6 +178,7 @@ public class VideoPlayerView {
         forwardFiveButton.setDisable(disabled);
         stopButton.setDisable(disabled);
         audioButton.setDisable(disabled);
+        subtitleButton.setDisable(disabled);
     }
 
     // There are a bunch of tooltip handling methods starting from here. We want to use tooltips so that people with
@@ -169,6 +190,7 @@ public class VideoPlayerView {
         setButtonTooltip(forwardFiveButton, "[RIGHT]");
         setButtonTooltip(stopButton, "[ESC]");
         setButtonTooltip(audioButton, "[A]");
+        setButtonTooltip(subtitleButton, "[S]");
     }
 
     private void setButtonTooltip(Button button, String text) {

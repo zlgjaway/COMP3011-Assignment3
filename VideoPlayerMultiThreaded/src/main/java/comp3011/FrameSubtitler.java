@@ -15,9 +15,29 @@ import org.bytedeco.javacv.Frame;
  * This first version uses fixed text to test rendering.
  */
 public class FrameSubtitler extends FrameProcessor {
+	
+	private volatile java.util.List<SubtitleClient.Subtitle> subtitles =
+	        java.util.List.of();
+
+	
+	private volatile boolean enabled = true;
+
+	public void setEnabled(boolean enabled) {
+	    this.enabled = enabled;
+	}
+	
+	public void setSubtitles(
+	        java.util.List<SubtitleClient.Subtitle> subtitles) {
+
+	    this.subtitles = java.util.List.copyOf(subtitles);
+	}
 
     @Override
     public void process(Frame frame, InfoFrame info) throws Exception {
+    	
+    	if (!enabled) {
+    	    return;
+    	}
 
         if (frame.image == null || frame.image.length == 0) {
             return;
@@ -57,24 +77,55 @@ public class FrameSubtitler extends FrameProcessor {
             int fontSize = Math.max(16, width / 35);
             g.setFont(new Font("SansSerif", Font.BOLD, fontSize));
 
-            String text = "Subtitle Test";
+            // Get the current video playback time in seconds.
+            double currentTime = info.timestampUs() / 1_000_000.0;
 
-            int textWidth = g.getFontMetrics().stringWidth(text);
-            int x = Math.max(0, (width - textWidth) / 2);
-            int y = height - Math.max(20, height / 12);
+            // Find the subtitle matching the current time.
+            String text = "";
 
-            // Black outline for readability.
-            g.setColor(Color.BLACK);
+            for (SubtitleClient.Subtitle subtitle : subtitles) {
 
-            for (int dx = -2; dx <= 2; dx++) {
-                for (int dy = -2; dy <= 2; dy++) {
-                    g.drawString(text, x + dx, y + dy);
+                if (currentTime >= subtitle.start()
+                        && currentTime < subtitle.end()) {
+
+                    text = subtitle.text();
+                    break;
                 }
             }
 
-            // White subtitle text.
-            g.setColor(Color.WHITE);
-            g.drawString(text, x, y);
+            // No subtitle for this frame.
+            if (text.isEmpty()) {
+                return;
+            }
+
+	         // Wrap subtitles into a maximum of two lines,
+	         // with no more than 42 characters per line.
+	         java.util.List<String> lines = wrapSubtitle(text);
+	
+	         int lineHeight = g.getFontMetrics().getHeight();
+	         int bottomY = height - Math.max(20, height / 12);
+	         int firstY = bottomY - (lines.size() - 1) * lineHeight;
+	
+	         for (int i = 0; i < lines.size(); i++) {
+	             String line = lines.get(i);
+	
+	             int textWidth = g.getFontMetrics().stringWidth(line);
+	             int x = Math.max(0, (width - textWidth) / 2);
+	             int y = firstY + i * lineHeight;
+	
+	             // Draw black outline.
+	             g.setColor(Color.BLACK);
+	
+	             for (int dx = -2; dx <= 2; dx++) {
+	                 for (int dy = -2; dy <= 2; dy++) {
+	                     g.drawString(line, x + dx, y + dy);
+	                 }
+	             }
+	
+	             // Draw white subtitle text.
+	             g.setColor(Color.WHITE);
+	             g.drawString(line, x, y);
+	         }
 
         } finally {
             g.dispose();
@@ -114,4 +165,56 @@ public class FrameSubtitler extends FrameProcessor {
             }
         }
     }
+    
+    private java.util.List<String> wrapSubtitle(String text) {
+
+        java.util.List<String> lines = new java.util.ArrayList<>();
+        StringBuilder currentLine = new StringBuilder();
+
+        for (String word : text.trim().split("\\s+")) {
+
+            // Split exceptionally long words so no line exceeds 42 characters.
+            while (word.length() > 42) {
+                if (!currentLine.isEmpty()) {
+                    lines.add(currentLine.toString());
+                    currentLine.setLength(0);
+                }
+
+                lines.add(word.substring(0, 42));
+                word = word.substring(42);
+            }
+
+            if (word.isEmpty()) {
+                continue;
+            }
+
+            int proposedLength = currentLine.length()
+                    + (currentLine.isEmpty() ? 0 : 1)
+                    + word.length();
+
+            if (proposedLength > 42) {
+                lines.add(currentLine.toString());
+                currentLine.setLength(0);
+            }
+
+            if (!currentLine.isEmpty()) {
+                currentLine.append(" ");
+            }
+
+            currentLine.append(word);
+        }
+
+        if (!currentLine.isEmpty()) {
+            lines.add(currentLine.toString());
+        }
+
+        // Display at most two lines.
+        if (lines.size() > 2) {
+            return lines.subList(0, 2);
+        }
+
+        return lines;
+    }
+    
+    
 }

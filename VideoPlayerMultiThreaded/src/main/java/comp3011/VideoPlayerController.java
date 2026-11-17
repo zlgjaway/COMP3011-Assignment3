@@ -30,12 +30,20 @@ public class VideoPlayerController {
     private final VideoPlayerModel model;
     private final VideoPlayerView view;
     private final BiConsumer<Integer, Integer> videoSizeChangedHandler;
-
+    private final List<FrameSubtitler> subtitleProcessors;
+    private boolean subtitlesEnabled;
+    
     public VideoPlayerController(
     		boolean audioEnabled,
             List<FrameProcessor> frameProcessors,
             BiConsumer<Integer, Integer> videoSizeChangedHandler)  {
         this.view = new VideoPlayerView();
+        this.subtitleProcessors = frameProcessors.stream()
+                .filter(p -> p instanceof FrameSubtitler)
+                .map(p -> (FrameSubtitler) p)
+                .toList();
+
+        this.subtitlesEnabled = !subtitleProcessors.isEmpty();
         this.videoSizeChangedHandler = videoSizeChangedHandler;
         model = new VideoPlayerModel(
                 audioEnabled,
@@ -52,6 +60,9 @@ public class VideoPlayerController {
         view.getForwardFiveButton().setOnAction(_ -> forwardFiveSeconds());
         view.getStopButton().setOnAction(_ -> stopAndExit());
         view.getAudioButton().setOnAction(_ -> toggleAudioOutput());
+        view.getSubtitleButton().setOnAction(_ -> toggleSubtitles());
+        view.showSubtitlesEnabled(subtitlesEnabled);
+        view.getSubtitleButton().setDisable(subtitleProcessors.isEmpty());
         view.showAudioEnabled(model.isAudioOutputEnabled());
     }
 
@@ -75,7 +86,11 @@ public class VideoPlayerController {
             } else if (event.getCode() == KeyCode.A) {
                 toggleAudioOutput();
                 event.consume();
+            } else if (event.getCode() == KeyCode.S) {
+                toggleSubtitles();
+                event.consume();
             }
+            
         });
     }
 
@@ -110,6 +125,20 @@ public class VideoPlayerController {
 
     private void toggleAudioOutput() {
         model.toggleAudioOutput();
+    }
+    
+    private void toggleSubtitles() {
+        if (subtitleProcessors.isEmpty()) {
+            return;
+        }
+
+        subtitlesEnabled = !subtitlesEnabled;
+
+        for (FrameSubtitler subtitler : subtitleProcessors) {
+            subtitler.setEnabled(subtitlesEnabled);
+        }
+
+        view.showSubtitlesEnabled(subtitlesEnabled);
     }
 
     private void stopAndExit() {

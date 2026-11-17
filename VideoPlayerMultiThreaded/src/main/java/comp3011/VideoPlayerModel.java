@@ -114,12 +114,52 @@ public class VideoPlayerModel {
 
     }
 
-    public void play(File file) {
-        videoFile = file;
-        videoDurationUs = NO_SEEK_REQUEST;
-        videoFrameDurationUs = 0;
-        startPlayback(0, false, NO_SEEK_REQUEST);
-    }
+
+	public void play(File file) {
+	    videoFile = file;
+	    videoDurationUs = NO_SEEK_REQUEST;
+	    videoFrameDurationUs = 0;
+	
+	    // Clear subtitles from the previous video.
+	    for (FrameProcessor processor : frameProcessors) {
+	        if (processor instanceof FrameSubtitler subtitler) {
+	            subtitler.setSubtitles(java.util.List.of());
+	        }
+	    }
+	
+	    // Start playback immediately.
+	    startPlayback(0, false, NO_SEEK_REQUEST);
+	
+	    // Request subtitles asynchronously.
+	    boolean subtitlesRequested = frameProcessors.stream()
+	            .anyMatch(p -> p instanceof FrameSubtitler);
+	
+	    if (subtitlesRequested) {
+	        new SubtitleClient().fetch(file)
+	                .thenAccept(segments -> {
+	                    // Ignore a response for an older video.
+	                    if (videoFile != file) {
+	                        return;
+	                    }
+	
+	                    for (FrameProcessor processor : frameProcessors) {
+	                        if (processor instanceof FrameSubtitler subtitler) {
+	                            subtitler.setSubtitles(segments);
+	                        }
+	                    }
+	
+	                    System.out.println(
+	                            "Loaded " + segments.size()
+	                            + " subtitle segments.");
+	                })
+	                .exceptionally(error -> {
+	                    System.err.println(
+	                            "Subtitle request failed: " + error.getMessage());
+	                    return null;
+	                });
+	    }
+	}
+
 
     public void startOver() {
         if (videoFile == null) {
