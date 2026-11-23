@@ -3,6 +3,7 @@ package comp3011;
 
 import java.io.File;
 
+
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -14,11 +15,17 @@ import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.nio.file.Path;
-import java.util.concurrent.TimeUnit;
 import java.io.IOException;
+import java.security.MessageDigest;
+import java.util.HexFormat;
+import java.nio.file.StandardCopyOption;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+
+import org.bytedeco.javacv.FFmpegFrameGrabber;
+import org.bytedeco.javacv.FFmpegFrameRecorder;
+import org.bytedeco.javacv.Frame;
 
 public class SubtitleClient {
 
@@ -32,6 +39,93 @@ public class SubtitleClient {
     private static final int MAX_LINES = 2;
     private static final double MAX_CUE_DURATION = 3.0;
     private static final double MAX_WORD_GAP = 0.35;
+    
+    
+    private static final Path CACHE_DIR = Path.of(
+            System.getProperty("user.home"),
+            ".comp3011",
+            "subtitle-cache"
+    );
+
+    private Path cachePath(File mediaFile) throws Exception {
+        // Hash the media content, not its filename.
+        // This lets the same video reuse subtitles if moved or renamed.
+        MessageDigest digest = MessageDigest.getInstance("SHA-256");
+
+        try (var input = Files.newInputStream(mediaFile.toPath())) {
+            byte[] buffer = new byte[8192];
+            int count;
+
+            while ((count = input.read(buffer)) != -1) {
+                digest.update(buffer, 0, count);
+            }
+        }
+
+        String hash = HexFormat.of().formatHex(digest.digest());
+        return CACHE_DIR.resolve(hash + ".json");
+    }
+
+    private List<Subtitle> readCache(Path path) throws IOException {
+        JsonNode json = mapper.readTree(path.toFile());
+
+        if (!json.isArray()) {
+            throw new IOException("Invalid subtitle cache format");
+        }
+
+        List<Subtitle> result = new ArrayList<>();
+
+        for (JsonNode item : json) {
+            double start = item.path("start").asDouble();
+            double end = item.path("end").asDouble();
+            String text = item.path("text").asText();
+
+            if (!Double.isFinite(start)
+                    || !Double.isFinite(end)
+                    || start < 0
+                    || end <= start
+                    || text.isBlank()) {
+                throw new IOException("Invalid cached subtitle");
+            }
+
+            result.add(new Subtitle(start, end, text));
+        }
+
+        if (result.isEmpty()) {
+            throw new IOException("Subtitle cache is empty");
+        }
+
+        return List.copyOf(result);
+    }
+
+    private void writeCache(Path path, List<Subtitle> subtitles)
+            throws IOException {
+
+        Files.createDirectories(CACHE_DIR);
+
+        Path temp = Files.createTempFile(
+                CACHE_DIR, "subtitles-", ".tmp");
+
+        try {
+            mapper.writeValue(temp.toFile(), subtitles);
+
+            try {
+                Files.move(
+                        temp,
+                        path,
+                        StandardCopyOption.REPLACE_EXISTING,
+                        StandardCopyOption.ATOMIC_MOVE
+                );
+            } catch (java.nio.file.AtomicMoveNotSupportedException e) {
+                Files.move(
+                        temp,
+                        path,
+                        StandardCopyOption.REPLACE_EXISTING
+                );
+            }
+        } finally {
+            Files.deleteIfExists(temp);
+        }
+    }
 
 
 	private List<Subtitle> splitWords(JsonNode words) {
@@ -109,39 +203,41 @@ public class SubtitleClient {
 
     
 
-    private final HttpClient client = HttpClient.newHttpClient();
+	private final HttpClient client = HttpClient.newBuilder()
+	        .connectTimeout(java.time.Duration.ofSeconds(10))
+	        .build();
     private final ObjectMapper mapper = new ObjectMapper();
     
     private Path extractAudio(File mediaFile) throws Exception {
         Path audioFile = Files.createTempFile("subtitle-audio-", ".mp3");
 
         try {
-            ProcessBuilder builder = new ProcessBuilder(
-                    "ffmpeg",
-                    "-nostdin",
-                    "-y",
-                    "-i", mediaFile.getAbsolutePath(),
-                    "-vn",
-                    "-ac", "1",
-                    "-ar", "16000",
-                    "-b:a", "64k",
-                    audioFile.toString()
-            );
+            try (FFmpegFrameGrabber grabber =
+                         new FFmpegFrameGrabber(mediaFile);
+                 FFmpegFrameRecorder recorder =
+                         new FFmpegFrameRecorder(audioFile.toString(), 0, 1)) {
 
-            builder.redirectError(ProcessBuilder.Redirect.DISCARD);
+                grabber.start();
 
-            Process process = builder.start();
+                recorder.setFormat("mp3");
+                recorder.setAudioCodec(
+                        org.bytedeco.ffmpeg.global.avcodec.AV_CODEC_ID_MP3);
+                recorder.setSampleRate(16000);
+                recorder.setAudioChannels(1);
+                recorder.setAudioBitrate(64000);
 
-            boolean finished = process.waitFor(5, TimeUnit.MINUTES);
+                recorder.start();
 
-            if (!finished) {
-                process.destroyForcibly();
-                throw new IOException("FFmpeg audio extraction timed out");
-            }
+                Frame frame;
 
-            if (process.exitValue() != 0) {
-                throw new IOException(
-                        "FFmpeg failed with exit code " + process.exitValue());
+                while ((frame = grabber.grabSamples()) != null) {
+                    if (frame.samples != null) {
+                        recorder.recordSamples(
+                                grabber.getSampleRate(),
+                                grabber.getAudioChannels(),
+                                frame.samples);
+                    }
+                }
             }
 
             return audioFile;
@@ -154,11 +250,31 @@ public class SubtitleClient {
 
     public CompletableFuture<List<Subtitle>> fetch(File mediaFile) {
 
-        return CompletableFuture.supplyAsync(() -> {
-            Path audioFile = null;
+    	return CompletableFuture.supplyAsync(() -> {
+    	    Path audioFile = null;
+    	    Path cacheFile = null;
 
-            try {
-                audioFile = extractAudio(mediaFile);
+    	    try {
+    	        cacheFile = cachePath(mediaFile);
+
+    	        if (Files.exists(cacheFile)) {
+    	            try {
+    	                List<Subtitle> cached = readCache(cacheFile);
+
+    	                System.out.println(
+    	                        "Loaded " + cached.size()
+    	                        + " subtitles from disk cache.");
+
+    	                return cached;
+
+    	            } catch (IOException e) {
+    	                System.err.println(
+    	                        "Subtitle cache invalid, requesting again: "
+    	                        + e.getMessage());
+    	            }
+    	        }
+
+    	        audioFile = extractAudio(mediaFile);
 
                 String boundary = "Boundary" + UUID.randomUUID();
 
@@ -235,13 +351,32 @@ public class SubtitleClient {
                     }
                 }
 
-                return List.copyOf(subtitles);
+                List<Subtitle> result = List.copyOf(subtitles);
 
-            } catch (Exception e) {
-                throw new RuntimeException(
-                        "Unable to retrieve subtitles", e);
+                if (!result.isEmpty()) {
+                    try {
+                        writeCache(cacheFile, result);
 
-            } finally {
+                        System.out.println(
+                                "Saved " + result.size()
+                                + " subtitles to disk cache.");
+
+                    } catch (IOException e) {
+                        System.err.println(
+                                "Unable to save subtitle cache: "
+                                + e.getMessage());
+                    }
+                }
+
+                return result;
+
+    	    } catch (Exception e) {
+    	        System.err.println("Subtitle request failed:");
+    	        e.printStackTrace();
+
+    	        throw new RuntimeException(
+    	                "Unable to retrieve subtitles", e);
+    	    }finally {
                 if (audioFile != null) {
                     try {
                         Files.deleteIfExists(audioFile);

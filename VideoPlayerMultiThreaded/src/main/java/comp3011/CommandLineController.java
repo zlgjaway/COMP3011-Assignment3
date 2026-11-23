@@ -33,6 +33,11 @@ public class CommandLineController {
     private File videoFile;
     private String errorMessage;
     private final List<FrameProcessor> frameProcessors = new ArrayList<>();
+    private boolean subtitlesRequested = false;
+
+    public boolean isSubtitlesRequested() {
+        return subtitlesRequested;
+    }
     public CommandLineController(String[] args) {
         this.args = args.clone();
         parse();
@@ -69,9 +74,16 @@ public class CommandLineController {
     }
     
     public List<FrameProcessor> getFrameProcessors() {
-        return List.copyOf(frameProcessors);
-    }
+        List<FrameProcessor> processors = new ArrayList<>(frameProcessors);
 
+        FrameSubtitler subtitler = new FrameSubtitler();
+        subtitler.setEnabled(subtitlesRequested);
+
+        processors.add(subtitler);
+
+        return List.copyOf(processors);
+    }
+    
     public boolean shouldLaunchApplication() {
         return errorMessage == null && videoFile != null;
     }
@@ -141,7 +153,14 @@ public class CommandLineController {
         List<FrameProcessor> newProcessors = new ArrayList<>();
 
         for (int i = 1; i < arg.length(); i++) {
-            FrameProcessor processor = createProcessor(arg.charAt(i));
+            char option = arg.charAt(i);
+
+            if (option == 'S') {
+                subtitlesRequested = true;
+                continue;
+            }
+
+            FrameProcessor processor = createProcessor(option);
 
             if (processor == null) {
                 return false;
@@ -161,6 +180,10 @@ public class CommandLineController {
      * Supports the exact long option names specified in the assignment.
      */
     private boolean addLongEffect(String arg) {
+    	if ("--subtitle-frames".equals(arg)) {
+            subtitlesRequested = true;
+            return true;
+        }
         FrameProcessor processor = switch (arg) {
             case "--number-frames" -> new FrameNumberer();
             case "--scratch-frames" -> new FrameScratcher();
@@ -173,7 +196,8 @@ public class CommandLineController {
             case "--mottle-frames" -> new FrameMottler();
             case "--bleed-frames" -> new FrameBleeder();
             case "--pepper-frames" -> new FramePepperer();
-            case "--subtitle-frames" -> new FrameSubtitler();
+            //case "--subtitle-frames" -> new FrameSubtitler();
+            
             default -> null;
         };
 
@@ -188,39 +212,37 @@ public class CommandLineController {
     /**
      * Maps each short option to its frame processor.
      */
-    private FrameProcessor createProcessor(char option) {
 
-        return switch (option) {
+	private FrameProcessor createProcessor(char option) {
+	
+	    return switch (option) {
+	
+	        case 'n' -> new FrameNumberer();
+	
+	        case 's' -> new FrameScratcher();
+	
+	        case 'f' -> new FrameFlickerer();
+	
+	        case 'w' -> new FrameBlackAndWhiter();
+	
+	        case 'y' -> new FrameYellower();
+	
+	        case 'v' -> new FrameVignetter();
+	
+	        case 'd' -> new FrameDuster();
+	
+	        case 'j' -> new FrameJitterer();
+	
+	        case 'm' -> new FrameMottler();
+	
+	        case 'b' -> new FrameBleeder();
+	
+	        case 'p' -> new FramePepperer();
+	
+	        default -> null;
+	    };
+	}
 
-            case 'n' -> new FrameNumberer();
-
-            case 's' -> new FrameScratcher();
-
-            // Assignment 3: Subtitle frame processor
-            case 'S' -> new FrameSubtitler();
-
-            case 'f' -> new FrameFlickerer();
-
-            case 'w' -> new FrameBlackAndWhiter();
-
-            case 'y' -> new FrameYellower();
-
-            case 'v' -> new FrameVignetter();
-
-            case 'd' -> new FrameDuster();
-
-            case 'j' -> new FrameJitterer();
-
-            case 'm' -> new FrameMottler();
-
-            case 'b' -> new FrameBleeder();
-
-            case 'p' -> new FramePepperer();
-
-            default -> null;
-
-        };
-    }
     
     private void setDisplayId(int displayId) {
         if (this.displayId != null && this.displayId != displayId) {

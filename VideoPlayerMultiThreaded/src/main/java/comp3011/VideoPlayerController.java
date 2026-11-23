@@ -43,7 +43,8 @@ public class VideoPlayerController {
                 .map(p -> (FrameSubtitler) p)
                 .toList();
 
-        this.subtitlesEnabled = !subtitleProcessors.isEmpty();
+        this.subtitlesEnabled = subtitleProcessors.stream()
+                .anyMatch(FrameSubtitler::isEnabled);
         this.videoSizeChangedHandler = videoSizeChangedHandler;
         model = new VideoPlayerModel(
                 audioEnabled,

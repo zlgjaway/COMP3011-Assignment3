@@ -115,6 +115,8 @@ public class VideoPlayerModel {
     }
 
 
+
+
 	public void play(File file) {
 	    videoFile = file;
 	    videoDurationUs = NO_SEEK_REQUEST;
@@ -127,17 +129,16 @@ public class VideoPlayerModel {
 	        }
 	    }
 	
-	    // Start playback immediately.
+	    // Start video playback immediately.
 	    startPlayback(0, false, NO_SEEK_REQUEST);
 	
-	    // Request subtitles asynchronously.
+	    // Load subtitles asynchronously without delaying playback.
 	    boolean subtitlesRequested = frameProcessors.stream()
 	            .anyMatch(p -> p instanceof FrameSubtitler);
 	
 	    if (subtitlesRequested) {
 	        new SubtitleClient().fetch(file)
 	                .thenAccept(segments -> {
-	                    // Ignore a response for an older video.
 	                    if (videoFile != file) {
 	                        return;
 	                    }
@@ -154,7 +155,8 @@ public class VideoPlayerModel {
 	                })
 	                .exceptionally(error -> {
 	                    System.err.println(
-	                            "Subtitle request failed: " + error.getMessage());
+	                            "Subtitle request failed: "
+	                            + error.getMessage());
 	                    return null;
 	                });
 	    }
@@ -421,13 +423,16 @@ public class VideoPlayerModel {
             }
 
             int frameNumber = grabber.getFrameNumber();
+
+            long relativeTimestampUs = Math.max(0, timestampUs - firstTimestampUs);
+            long targetTimeNs = playbackStartNs + relativeTimestampUs * 1_000L;
+
+
             InfoFrame info = new InfoFrame(frameNumber, timestampUs);
             processFrame(frame, info);
 
             Image image = converter.convert(frame);
-            long relativeTimestampUs = Math.max(0, timestampUs - firstTimestampUs);
             long logicalTimestampUs = logicalPlaybackBaseUs + relativeTimestampUs;
-            long targetTimeNs = playbackStartNs + relativeTimestampUs * 1_000L;
 
             return new PreparedFrame(
                     image,

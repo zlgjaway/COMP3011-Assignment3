@@ -26,6 +26,10 @@ public class FrameSubtitler extends FrameProcessor {
 	    this.enabled = enabled;
 	}
 	
+	public boolean isEnabled() {
+	    return enabled;
+	}
+	
 	public void setSubtitles(
 	        java.util.List<SubtitleClient.Subtitle> subtitles) {
 
@@ -60,6 +64,22 @@ public class FrameSubtitler extends FrameProcessor {
                 && videoInfo.imageDepth() != Frame.DEPTH_BYTE) {
             return;
         }
+        
+        double currentTime = info.timestampUs() / 1_000_000.0;
+
+        String text = "";
+
+        for (SubtitleClient.Subtitle subtitle : subtitles) {
+            if (currentTime >= subtitle.start()
+                    && currentTime < subtitle.end()) {
+                text = subtitle.text();
+                break;
+            }
+        }
+
+        if (text.isEmpty()) {
+            return;
+        }
 
         // Create a transparent layer for subtitle text.
         BufferedImage overlay = new BufferedImage(
@@ -76,27 +96,6 @@ public class FrameSubtitler extends FrameProcessor {
 
             int fontSize = Math.max(16, width / 35);
             g.setFont(new Font("SansSerif", Font.BOLD, fontSize));
-
-            // Get the current video playback time in seconds.
-            double currentTime = info.timestampUs() / 1_000_000.0;
-
-            // Find the subtitle matching the current time.
-            String text = "";
-
-            for (SubtitleClient.Subtitle subtitle : subtitles) {
-
-                if (currentTime >= subtitle.start()
-                        && currentTime < subtitle.end()) {
-
-                    text = subtitle.text();
-                    break;
-                }
-            }
-
-            // No subtitle for this frame.
-            if (text.isEmpty()) {
-                return;
-            }
 
 	         // Wrap subtitles into a maximum of two lines,
 	         // with no more than 42 characters per line.
@@ -221,6 +220,5 @@ public class FrameSubtitler extends FrameProcessor {
 
         return lines;
     }
-    
-    
+  
 }
